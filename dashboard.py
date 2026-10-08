@@ -88,24 +88,9 @@ _TEMPLATE = r"""<!doctype html>
 <style>
 :root {
   color-scheme: light;
-  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
-  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,0.10);
-  --s1: #2a78d6; --s2: #eb6834; --s8: #e34948; --bench: #898781; --mid: #f0efec;
-  --good: #0ca30c; --warning: #fab219; --critical: #d03b3b; --good-ink: #006300;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
-    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
-    --s1: #3987e5; --s2: #d95926; --s8: #e66767; --bench: #898781; --mid: #383835; --good-ink: #0ca30c;
-  }
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
-  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
-  --s1: #3987e5; --s2: #d95926; --s8: #e66767; --bench: #898781; --mid: #383835; --good-ink: #0ca30c;
+  --page: #f4f4f4; --surface: #ffffff; --ink: #111111; --ink-2: #555555; --muted: #8a8a8a;
+  --grid: #e8e8e8; --axis: #c8c8c8; --ring: rgba(0,0,0,0.10);
+  --blue: #2a78d6; --blue-2: #86b6ef; --red: #d03b3b; --gray: #9a9a9a; --gray-2: #c4c4c4; --mid: #f2f2f2;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--page); color: var(--ink);
@@ -115,9 +100,8 @@ header h1 { font-size: 17px; margin: 0 auto 0 0; font-weight: 650; }
 label { color: var(--ink-2); font-size: 13px; display: flex; gap: 8px; align-items: center;
         flex: 1 1 280px; max-width: 520px; min-width: 0; }
 label select { flex: 1; min-width: 0; }
-select, button { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--ring);
+select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--ring);
                  border-radius: 8px; padding: 6px 10px; max-width: 100%; }
-button { cursor: pointer; }
 main { display: grid; gap: 16px; padding: 0 16px 24px; grid-template-columns: minmax(0, 1fr); }
 main.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 1100px) { main.two { grid-template-columns: minmax(0, 1fr); } }
@@ -134,8 +118,8 @@ main.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .v .note { font-size: 11.5px; color: var(--muted); }
 .ic { width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center;
       font-size: 11px; font-weight: 700; color: #fff; flex: none; }
-.ic.pass { background: var(--good); } .ic.warn { background: var(--warning); color: #0b0b0b; }
-.ic.fail { background: var(--critical); } .ic.info { background: var(--muted); }
+.ic.pass { background: var(--blue); } .ic.warn { background: var(--ink-2); }
+.ic.fail { background: var(--red); } .ic.info { background: var(--gray-2); }
 .tiles { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
 .tile .k { font-size: 12px; color: var(--ink-2); }
 .tile .n { font-size: 22px; font-weight: 600; }
@@ -156,7 +140,6 @@ code { font-size: 12.5px; }
   <h1>Backtest Dashboard</h1>
   <label>Run <select id="runA"></select></label>
   <label>Compare <select id="runB"></select></label>
-  <button id="theme" title="Toggle light / dark">◐</button>
 </header>
 <main id="main"></main>
 <script>
@@ -245,24 +228,25 @@ function renderRun(el, run) {
       <div class="card"><h3>Data health</h3>${health(m.health)}</div>
     </div>`;
 
-  const d = run.daily, s1 = css('--s1'), s2 = css('--s2'), bench = css('--bench');
+  const d = run.daily, blue = css('--blue'), red = css('--red'), gray = css('--gray');
   const folds = run.folds.slice(1).map(f => ({type: 'line', xref: 'x', yref: 'paper', x0: f.test, x1: f.test, y0: 0, y1: 1,
                                             line: {color: css('--axis'), width: 1}}));
   Plotly.newPlot(id('eq'), [
-    line(d.date, d.net, 'Net', s1, {hovertemplate: '%{y:$,.0f}'}),
-    line(d.date, d.gross, 'Before costs', s2, {hovertemplate: '%{y:$,.0f}'}),
-    line(d.date, d.bench, 'Buy & hold', bench, {hovertemplate: '%{y:$,.0f}'}),
+    line(d.date, d.net, 'Net', blue, {hovertemplate: '%{y:$,.0f}'}),
+    line(d.date, d.gross, 'Before costs', css('--blue-2'), {hovertemplate: '%{y:$,.0f}'}),
+    line(d.date, d.bench, 'Buy & hold', gray, {hovertemplate: '%{y:$,.0f}'}),
   ], base({shapes: folds, yaxis: Object.assign(base().yaxis, {tickformat: '$,.0f'})}), CFG);
 
-  Plotly.newPlot(id('dd'), [line(d.date, d.dd, 'Drawdown', css('--s8'),
-    {fill: 'tozeroy', fillcolor: css('--s8') + '22', hovertemplate: '%{y:.1%}', showlegend: false})],
+  Plotly.newPlot(id('dd'), [line(d.date, d.dd, 'Drawdown', red,
+    {fill: 'tozeroy', fillcolor: red + '1f', hovertemplate: '%{y:.1%}', showlegend: false})],
     base({yaxis: Object.assign(base().yaxis, {tickformat: '.0%'})}), CFG);
 
   const fx = run.folds.map(f => f.test.slice(0, 7)), fp = run.folds.map(f => f.params);
   Plotly.newPlot(id('folds'), [
-    {x: fx, y: run.folds.map(f => f.is_sharpe), name: 'In-sample', type: 'bar', marker: {color: s1},
+    {x: fx, y: run.folds.map(f => f.is_sharpe), name: 'In-sample', type: 'bar', marker: {color: css('--gray-2')},
      customdata: fp, hovertemplate: '%{y:.2f}<br>%{customdata}<extra>In-sample</extra>'},
-    {x: fx, y: run.folds.map(f => f.oos_sharpe), name: 'Out-of-sample', type: 'bar', marker: {color: s2},
+    {x: fx, y: run.folds.map(f => f.oos_sharpe), name: 'Out-of-sample', type: 'bar',
+     marker: {color: run.folds.map(f => f.oos_sharpe < 0 ? red : blue)},
      hovertemplate: '%{y:.2f}<extra>Out-of-sample</extra>'},
   ], base({barmode: 'group', bargap: 0.3, bargroupgap: 0.08, hovermode: 'closest',
            xaxis: Object.assign(base().xaxis, {type: 'category'})}), CFG);
@@ -270,7 +254,7 @@ function renderRun(el, run) {
   const h = run.heat, zs = h.z.flat().filter(v => v != null), lim = Math.max(0.1, ...zs.map(Math.abs));
   Plotly.newPlot(id('heat'), [{
     type: 'heatmap', x: h.x, y: h.y, z: h.z, zmin: -lim, zmax: lim, zmid: 0, xgap: 2, ygap: 2,
-    colorscale: [[0, css('--s8')], [0.5, css('--mid')], [1, css('--s1')]],
+    colorscale: [[0, red], [0.5, css('--mid')], [1, blue]],
     text: h.chosen.map(r => r.map(n => n ? `×${n}` : '')), texttemplate: '%{text}',
     textfont: {color: css('--ink')}, customdata: h.chosen,
     hovertemplate: `${h.xname} %{x}${h.yname ? `<br>${h.yname} %{y}` : ''}<br>Sharpe %{z:.2f}<br>chosen %{customdata}×<extra></extra>`,
@@ -280,14 +264,14 @@ function renderRun(el, run) {
 
   const y = run.yearly;
   Plotly.newPlot(id('yr'), [
-    {x: y.year, y: y.net, name: 'Strategy', type: 'bar', marker: {color: s1}, hovertemplate: '%{y:.1%}'},
-    {x: y.year, y: y.bench, name: 'Buy & hold', type: 'bar', marker: {color: bench}, hovertemplate: '%{y:.1%}'},
+    {x: y.year, y: y.net, name: 'Strategy', type: 'bar', marker: {color: y.net.map(v => v < 0 ? red : blue)}, hovertemplate: '%{y:.1%}'},
+    {x: y.year, y: y.bench, name: 'Buy & hold', type: 'bar', marker: {color: css('--gray-2')}, hovertemplate: '%{y:.1%}'},
   ], base({barmode: 'group', bargap: 0.3, bargroupgap: 0.08, yaxis: Object.assign(base().yaxis, {tickformat: '.0%'}),
            xaxis: Object.assign(base().xaxis, {type: 'category'})}), CFG);
 
   const r = run.rolling;
-  Plotly.newPlot(id('roll'), [line(r.date, r.net, 'Strategy', s1, {hovertemplate: '%{y:.2f}'}),
-                              line(r.date, r.bench, 'Buy & hold', bench, {hovertemplate: '%{y:.2f}'})],
+  Plotly.newPlot(id('roll'), [line(r.date, r.net, 'Strategy', blue, {hovertemplate: '%{y:.2f}'}),
+                              line(r.date, r.bench, 'Buy & hold', gray, {hovertemplate: '%{y:.2f}'})],
     base({yaxis: Object.assign(base().yaxis, {zeroline: true})}), CFG);
 }
 
@@ -315,13 +299,6 @@ try {
   if (byId[b]) selB.value = b;
 } catch (e) {}
 selA.onchange = selB.onchange = render;
-document.getElementById('theme').onclick = () => {
-  const root = document.documentElement;
-  const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-  root.dataset.theme = dark ? 'light' : 'dark';
-  render();
-};
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
 render();
 </script>
 </body></html>
