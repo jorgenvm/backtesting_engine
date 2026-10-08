@@ -14,6 +14,8 @@ from statistics import NormalDist
 import numpy as np
 import pandas as pd
 
+from bt.config import TZ
+
 DAYS = 252
 _ND = NormalDist()
 
@@ -86,21 +88,34 @@ def summary(d: pd.DataFrame, bench: pd.Series) -> dict:
     }
 
 
-def trade_stats(trades: pd.DataFrame) -> dict:
-    """Bracket trade statistics in R (net of costs)."""
-    r = trades["r_net"].to_numpy(dtype=float)
-    if not len(r):
-        return {"trades": 0}
-    wins, losses = r[r > 0], r[r <= 0]
-    streak = best = 0
-    for x in r:
-        streak = streak + 1 if x <= 0 else 0
-        best = max(best, streak)
-    return {
-        "trades": len(r), "win_rate": float((r > 0).mean()), "avg_r": float(r.mean()),
-        "avg_win_r": float(wins.mean()) if wins.size else 0.0,
-        "avg_loss_r": float(losses.mean()) if losses.size else 0.0,
-        "profit_factor": float(wins.sum() / -losses.sum()) if losses.sum() < 0 else None,
-        "total_r": float(r.sum()), "max_loss_streak": best,
-        "results": trades["result"].value_counts().to_dict(),
+def evaluation(trades: pd.DataFrame, d: pd.DataFrame, initial: float) -> dict | None:
+    """Trade-level evaluation of closed trades, in USD and (bracket strategies) in R.
+    Active days / weeks = those with at least one exit; trades still open are only counted."""
+    t = trades[trades["result"] != "open"]
+    if t.empty:
+        return None
+    exit_day = pd.DatetimeIndex(pd.to_datetime(t["exit_time"], utc=True)).tz_convert(TZ).tz_localize(None).normalize()
+    pnl, r = t["pnl"].to_numpy(float), t["r_net"].to_numpy(float)
+    day_pnl = pd.Series(pnl, index=exit_day).groupby(level=0).sum()
+    days, weeks = len(day_pnl), exit_day.to_period("W").nunique()
+    hold = (pd.to_datetime(t["exit_time"]) - pd.to_datetime(t["entry_time"])).dt.total_seconds().mean()
+    decided = (t["result"] != "be").to_numpy() & (pnl != 0)
+    r_eq = np.r_[0.0, np.cumsum(r)]
+    tail = t.tail(5)
+    out = {
+        "trades": len(t), "open": int((trades["result"] == "open").sum()),
+        "per_day": len(t) / days, "per_week": len(t) / weeks,
+        "win_days": int((day_pnl > 0).sum()), "loss_days": int((day_pnl < 0).sum()),
+        "hold_days": hold / 86400, "hold_hours": hold / 3600, "hold_minutes": hold / 60,
+        "winrate": float((pnl[decided] > 0).mean()) if decided.any() else 0.0,
+        "streak": ["B" if res == "be" else "W" if p > 0 else "L" for p, res in zip(tail["pnl"], tail["result"])],
+        "usd": {"per_day": float(pnl.sum() / days), "best": float(pnl.max()), "worst": float(pnl.min()),
+                "fees": float(-(t["pnl_gross"] - t["pnl"]).sum()), "roi": float(pnl.sum() / initial),
+                "max_dd": float(-drawdown(d["ret"]).min())},
+        "r": None,
     }
+    if not np.isnan(r).any():
+        out["r"] = {"per_day": float(r.sum() / days), "best": float(r.max()), "worst": float(r.min()),
+                    "fees": float(-(t["r_gross"] - t["r_net"]).sum()), "total": float(r.sum()),
+                    "max_dd": float((np.maximum.accumulate(r_eq) - r_eq).max())}
+    return out

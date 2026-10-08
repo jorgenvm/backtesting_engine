@@ -31,17 +31,29 @@ def entry_cost() -> float:
 # ── Engine timing and costs ───────────────────────────────────────────────────
 def test_always_long_equals_buy_and_hold_minus_one_entry_cost():
     bars = make_bars()
-    daily = engine.simulate_positions(bars, pd.Series(1.0, index=bars.index), SYM)
+    daily, trades = engine.simulate_positions(bars, pd.Series(1.0, index=bars.index), SYM)
     bench = engine.benchmark(bars, SYM)
     assert daily["pnl"].sum() == pytest.approx(bench["pnl_gross"].sum() - entry_cost())
     assert daily["turnover"].sum() == 1.0
+    assert len(trades) == 1 and trades["pnl"].iloc[0] == pytest.approx(daily["pnl"].sum())
+
+
+def test_position_trades_split_round_trips_and_their_costs():
+    bars = make_bars(n=40)
+    target = pd.Series(0.0, index=bars.index)
+    target.iloc[5:15], target.iloc[15:25], target.iloc[30:35] = 1.0, -2.0, 1.0   # long, flip short, flat, long
+    daily, trades = engine.simulate_positions(bars, target, SYM)
+    assert list(trades["direction"]) == ["long", "short", "long"] and list(trades["size"]) == [1, 2, 1]
+    assert trades["pnl"].sum() == pytest.approx(daily["pnl"].sum())
+    assert trades["pnl_gross"].sum() - trades["pnl"].sum() == pytest.approx(daily["cost"].sum())
+    assert trades["entry_time"].iloc[1] == bars.index[16] and trades["exit_time"].iloc[0] == bars.index[16]
 
 
 def test_perfect_foresight_is_acted_on_one_bar_later():
     bars = make_bars(gaps=False)
     move = (bars["close"] - bars["open"]).to_numpy() * instrument(SYM)["point_value"]
     seer = np.sign(bars["close"] - bars["open"])           # knows its own bar's direction
-    daily = engine.simulate_positions(bars, seer, SYM)
+    daily, _ = engine.simulate_positions(bars, seer, SYM)
     delayed = np.sum(seer.shift(1).fillna(0).to_numpy() * move)
     same_bar = np.sum(seer.to_numpy() * move)
     assert daily["pnl_gross"].sum() == pytest.approx(delayed)
@@ -55,11 +67,12 @@ def test_roll_jump_is_not_pnl_and_costs_a_round_trip():
     bars.loc[bars.index[50]:, ["open", "high", "low", "close"]] += 500   # next contract trades 500 higher
     bars.loc[bars.index[50]:, "contract"] = 1
     flat = make_bars(n=100)
-    a = engine.simulate_positions(bars, pd.Series(1.0, index=bars.index), SYM)
-    b = engine.simulate_positions(flat, pd.Series(1.0, index=flat.index), SYM)
+    a, ta = engine.simulate_positions(bars, pd.Series(1.0, index=bars.index), SYM)
+    b, _ = engine.simulate_positions(flat, pd.Series(1.0, index=flat.index), SYM)
     gap = (flat["open"].iloc[50] - flat["close"].iloc[49]) * instrument(SYM)["point_value"]
     assert a["pnl_gross"].sum() == pytest.approx(b["pnl_gross"].sum() - gap)
     assert a["turnover"].sum() == 3.0                      # entry + close and re-open at the roll
+    assert len(ta) == 1 and ta["result"].iloc[0] == "open"  # a roll does not end the trade
 
 
 def test_bracket_fills_next_open_and_stop_wins_ties():

@@ -33,6 +33,10 @@ def _hm(t) -> str:
     return "" if pd.isna(t) else f"{pd.Timestamp(t).tz_convert(TZ):%H:%M}"
 
 
+def _num(x) -> float | None:
+    return None if pd.isna(x) else round(float(x), 2)
+
+
 def _f(x, fmt: str) -> str:
     return "" if pd.isna(x) else format(x, fmt)
 
@@ -46,13 +50,13 @@ def build(left: pd.DataFrame, right: pd.DataFrame, title: str, trades: pd.DataFr
         end = r.exit_time if pd.notna(r.exit_time) else right.index[-1]
         ent, ext = _wall([r.entry_time, end])
         fibs.append(dict(dir=r.direction, ent=ent, ext=max(ext, ent + 60), result=r.result,
-                         r=None if pd.isna(r.r_net) else round(r.r_net, 2), stop=r.stop_price,
-                         entry=r.entry_price, be=None if pd.isna(r.be_price) else r.be_price, tp=r.tp_price))
+                         r=_num(r.r_net), usd=_num(r.pnl), stop=_num(r.stop_price), entry=_num(r.entry_price),
+                         be=_num(r.be_price), tp=_num(r.tp_price)))
     rows = "".join(
         f"<tr class='{r.direction}'><td>{_hm(r.entry_time)}</td><td>{r.session}</td><td>{r.direction}</td>"
-        f"<td>{r.entry_price:.2f}</td><td>{r.stop_price:.2f}</td><td>{_f(r.be_price, '.2f')}</td>"
-        f"<td>{r.tp_price:.2f}</td><td>{_hm(r.exit_time)}</td><td>{r.result}</td>"
-        f"<td>{_f(r.r_gross, '+.2f')}</td><td>{_f(r.r_net, '+.2f')}</td></tr>" for r in trades.itertuples())
+        f"<td>{r.entry_price:.2f}</td><td>{_f(r.stop_price, '.2f')}</td><td>{_f(r.be_price, '.2f')}</td>"
+        f"<td>{_f(r.tp_price, '.2f')}</td><td>{_hm(r.exit_time)}</td><td>{r.result}</td>"
+        f"<td>{_f(r.r_net, '+.2f')}</td><td>{_f(r.pnl, ',.0f')}</td></tr>" for r in trades.itertuples())
 
     def bg(df):
         return [dict(time=t, value=1 if s else 0) for t, s in zip(_wall(df.index), sessions.label(df.index))]
@@ -60,8 +64,7 @@ def build(left: pd.DataFrame, right: pd.DataFrame, title: str, trades: pd.DataFr
     vol = [dict(time=t, value=float(v)) for t, v in zip(_wall(right.index), right["volume"])]
     payload = json.dumps(dict(left=_candles(left), right=_candles(right), bgl=bg(left), bgr=bg(right),
                               vol=vol, fibs=fibs))
-    head = title + f" · {len(trades)} trades" + (
-        f" ({trades['r_net'].sum():+.2f}R net)" if len(trades) else "")
+    head = title + f" · {len(trades)} trades" + (f" (${trades['pnl'].sum():+,.0f} net)" if len(trades) else "")
     return (_TEMPLATE.replace("__TITLE__", head).replace("__LIB__", LIB).replace("__TZ__", TZ)
             .replace("__DATA__", payload).replace("__TRADES__", rows)
             .replace("__HIDE__", "" if len(trades) else "hidden")
@@ -114,7 +117,7 @@ _TEMPLATE = """<!doctype html><html><head><meta charset="utf-8"><title>Trade cha
 <div class="row"><div id="left"><span class="tag">__LB__</span></div><div id="right"><span class="tag" id="legend">__RB__</span></div></div>
 <div class="__HIDE__"><h4>Trades</h4>
 <table><tr><th>entry</th><th>session</th><th>dir</th><th>price</th><th>stop</th><th>BE</th><th>TP</th>
-<th>exit</th><th>result</th><th>R gross</th><th>R net</th></tr>__TRADES__</table></div>
+<th>exit</th><th>result</th><th>R net</th><th>USD net</th></tr>__TRADES__</table></div>
 <script>
 const D = __DATA__;
 function make(el, candles, bg) {
@@ -144,7 +147,8 @@ function trades(ch) {
             shape: long ? 'arrowUp' : 'arrowDown', text: long ? 'LONG' : 'SHORT'});
     if (F.result !== 'open') m.push({time: F.ext, position: long ? 'aboveBar' : 'belowBar',
             color: F.result === 'win' ? '#1a9a4a' : F.result === 'be' ? '#e08a00' : '#d6283a',
-            shape: 'circle', text: `${F.result.toUpperCase()} ${F.r > 0 ? '+' : ''}${F.r}R`});
+            shape: 'circle', text: `${F.result.toUpperCase()} ` + (F.r === null
+              ? `${F.usd > 0 ? '+' : ''}$${Math.round(F.usd)}` : `${F.r > 0 ? '+' : ''}${F.r}R`)});
   }
   return m.sort((a, b) => a.time - b.time);
 }

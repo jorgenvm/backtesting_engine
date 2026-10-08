@@ -124,6 +124,24 @@ main.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .tile .k { font-size: 12px; color: var(--ink-2); }
 .tile .n { font-size: 22px; font-weight: 600; }
 .tile .c { font-size: 12px; color: var(--muted); }
+.ehead { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+         padding-bottom: 12px; border-bottom: 1px solid var(--grid); }
+.ehead h3 { margin: 0; color: var(--ink); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.seg { display: flex; gap: 6px; }
+.seg button { font: inherit; min-width: 36px; height: 32px; border-radius: 4px; cursor: pointer;
+              border: 1px solid var(--axis); background: var(--surface); color: var(--ink); }
+.seg button.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+.seg button:disabled { opacity: .35; cursor: not-allowed; }
+.erows { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); column-gap: 40px; }
+.erow { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px 0;
+        border-bottom: 1px solid var(--grid); }
+.ek { color: var(--ink-2); }
+.ev { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.ev.pos { color: var(--blue); } .ev.neg { color: var(--red); }
+.chip { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 4px; border-radius: 3px;
+        color: #fff; font-size: 11px; font-weight: 700; }
+.chip.W { background: var(--blue); } .chip.L { background: var(--red); } .chip.B { background: var(--gray); }
+.muted { color: var(--muted); font-weight: 400; }
 .plot { width: 100%; height: 300px; }
 .plot.tall { height: 360px; }
 table { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums; }
@@ -173,7 +191,7 @@ function verdicts(m) {
     <div class="note">${esc(v.note)}</div></div>`).join('');
 }
 function tiles(m) {
-  const k = m.metrics, t = m.trade_stats;
+  const k = m.metrics;
   const rows = [
     ['CAGR', pct(k.cagr), `buy & hold ${pct(k.bench_cagr)}`],
     ['Sharpe', num(k.sharpe), `buy & hold ${num(k.bench_sharpe)}`],
@@ -182,10 +200,33 @@ function tiles(m) {
     ['Cost drag', pct(k.cost_drag, 2) + '/yr', `before costs ${pct(k.cagr_gross)}`],
     ['Turnover', Math.round(k.turnover_per_year).toLocaleString() + '/yr', 'units traded per year'],
   ];
-  if (t && t.trades) rows.push(
-    ['Trades', t.trades.toLocaleString(), `win rate ${pct(t.win_rate, 0)}`],
-    ['Avg trade', num(t.avg_r) + 'R', `PF ${t.profit_factor == null ? '–' : num(t.profit_factor)}`]);
   return rows.map(([a, b, c]) => `<div class="tile"><div class="k">${a}</div><div class="n">${b}</div><div class="c">${c}</div></div>`).join('');
+}
+function evaluation(card, e, unit) {
+  if (!e) { card.innerHTML = '<div class="ehead"><h3>Evaluation</h3></div><p class="muted">No closed trades.</p>'; return; }
+  const u = unit === 'r' && e.r ? 'r' : 'usd', v = e[u];
+  const money = x => (x < 0 ? '−$' : '$') + Math.abs(x).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const rr = x => (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x).toFixed(2) + 'R';
+  const f = u === 'r' ? rr : money, sign = x => x > 0 ? 'pos' : x < 0 ? 'neg' : '';
+  const rows = [
+    ['Total number of trades', e.trades.toLocaleString() + (e.open ? ` <span class="muted">+${e.open} open</span>` : '')],
+    ['Avg. profit per trading day', f(v.per_day), sign(v.per_day)],
+    ['Biggest winner', f(v.best), sign(v.best)],
+    ['Biggest loser', f(v.worst), sign(v.worst)],
+    ['Total fees, modelled', f(v.fees), 'neg'],
+    ['Avg. holding time (D / H / M)', `${num(e.hold_days)} / ${num(e.hold_hours)} / ${Math.round(e.hold_minutes).toLocaleString()}`],
+    ['Winrate w/o BE', pct(e.winrate, 2)],
+    u === 'r' ? ['Total R', rr(v.total), sign(v.total)] : ['ROI', pct(v.roi, 2), sign(v.roi)],
+    ['Max drawdown', u === 'r' ? v.max_dd.toFixed(2) + 'R' : pct(v.max_dd, 2)],
+    ['Winning / losing days', `${e.win_days} / ${e.loss_days}`],
+    ['Trades per active day / week', `${num(e.per_day)} / ${num(e.per_week)}`],
+    ['Current streak', e.streak.map(s => `<span class="chip ${s}" title="${{W: 'win', L: 'loss', B: 'breakeven'}[s]}">${s}</span>`).join('')],
+  ];
+  card.innerHTML = `<div class="ehead"><h3>Evaluation · out-of-sample trades</h3><div class="seg" role="group" aria-label="Units">
+      <button data-u="usd" class="${u === 'usd' ? 'on' : ''}" aria-pressed="${u === 'usd'}">$</button>
+      <button data-u="r" class="${u === 'r' ? 'on' : ''}" aria-pressed="${u === 'r'}" ${e.r ? '' : 'disabled title="R needs stop prices (bracket strategies)"'}>R</button></div></div>
+    <div class="erows">${rows.map(([k, val, c]) => `<div class="erow"><span class="ek">${k}</span><span class="ev ${c || ''}">${val}</span></div>`).join('')}</div>`;
+  card.querySelectorAll('.seg button').forEach(b => b.onclick = () => evaluation(card, e, b.dataset.u));
 }
 function health(h) {
   const rows = [['Source', h.source], ['Rows', h.rows.toLocaleString()], ['Bad rows dropped', `${h.bad_rows.toLocaleString()} (${h.bad_pct}%)`],
@@ -217,6 +258,7 @@ function renderRun(el, run) {
         ${m.kind} · delay ${m.delay} bar · code ${m.code_hash}${m.contaminated ? ' · <b>contaminated holdout</b>' : ''}</div></div>
     <div class="verdicts">${verdicts(m)}</div>
     <div class="card"><h3>Key metrics (net of costs)</h3><div class="tiles">${tiles(m)}</div></div>
+    <div class="card" id="${id('eval')}"></div>
     <div class="card"><h3>Equity, USD — vertical lines mark walk-forward folds</h3><div class="plot tall" id="${id('eq')}"></div></div>
     <div class="cards">
       <div class="card"><h3>Drawdown</h3><div class="plot" id="${id('dd')}"></div></div>
@@ -228,6 +270,7 @@ function renderRun(el, run) {
       <div class="card"><h3>Data health</h3>${health(m.health)}</div>
     </div>`;
 
+  evaluation(document.getElementById(id('eval')), m.evaluation, 'usd');
   const d = run.daily, blue = css('--blue'), red = css('--red'), gray = css('--gray');
   const folds = run.folds.slice(1).map(f => ({type: 'line', xref: 'x', yref: 'paper', x0: f.test, x1: f.test, y0: 0, y1: 1,
                                             line: {color: css('--axis'), width: 1}}));

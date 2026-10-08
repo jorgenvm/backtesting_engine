@@ -32,7 +32,8 @@ already through its stop or target is skipped.
 
 Daily frame (index: trading day in config timezone):
   pnl_gross  USD before costs   cost  USD   pnl  USD net   turnover  units traded
-Bracket P&L is booked on the exit day.
+Bracket P&L is booked on the exit day. Positions also get a trade list: one round trip from
+opening to flat (or a flip), without stop / target / R columns.
 """
 from __future__ import annotations
 
@@ -99,8 +100,8 @@ def returns(daily: pd.DataFrame, initial: float = CFG["account"]["initial_balanc
 
 # ── Positions ─────────────────────────────────────────────────────────────────
 def simulate_positions(bars: pd.DataFrame, target, symbol: str, delay: int = 1,
-                       costs: bool = True) -> pd.DataFrame:
-    """Daily frame for target units decided per bar, filled at the open delay bars later."""
+                       costs: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(daily frame, trade list) for target units decided per bar, filled at the open delay bars later."""
     _check_delay(delay)
     inst = instrument(symbol)
     if not isinstance(target, pd.Series):
@@ -110,14 +111,59 @@ def simulate_positions(bars: pd.DataFrame, target, symbol: str, delay: int = 1,
     o, c, cid = (bars[k].to_numpy() for k in ("open", "close", "contract"))
     roll = np.r_[False, cid[1:] != cid[:-1]]
     gap = np.where(roll, 0.0, prev * (o - np.r_[o[0], c[:-1]]))     # previous close → this open
-    gross = (gap + held * (c - o)) * inst["point_value"]
+    move = held * (c - o)
     traded = np.where(roll, np.abs(prev) + np.abs(held), np.abs(held - prev))
-    return _daily(bars.index, gross, traded * _unit_cost(bars, inst, costs), traded)
+    unit = _unit_cost(bars, inst, costs)
+    daily = _daily(bars.index, (gap + move) * inst["point_value"], traded * unit, traded)
+    return daily, _position_trades(bars, held, prev, gap, move, traded, unit, inst["point_value"], delay)
+
+
+def _position_trades(bars, held, prev, gap, move, traded, unit, pv, delay) -> pd.DataFrame:
+    """Round trips: flat (or the other side) → position → flat (or flipped). Resizing and rolls
+    stay inside one trade. A flip's cost is split between the closing and the opening trade."""
+    start = (held != 0) & (np.sign(held) != np.sign(prev))
+    k = int(start.sum())
+    if not k:
+        return pd.DataFrame(columns=TRADE_COLUMNS)
+    tid = np.where(held != 0, np.cumsum(start) - 1, -1)          # trade held through each bar
+    ptid = np.r_[-1, tid[:-1]]                                    # trade held into each bar's open
+    same = tid == ptid
+    gross, cost, size = np.zeros(k), np.zeros(k), np.zeros(k)
+
+    def add(ids, vals):
+        m = ids >= 0
+        return ids[m], vals[m]
+
+    for arr, (ids, vals) in ((gross, add(ptid, gap * pv)), (gross, add(tid, move * pv)),
+                             (cost, add(np.where(same, tid, -1), traded * unit)),
+                             (cost, add(np.where(same, -1, ptid), np.abs(prev) * unit)),
+                             (cost, add(np.where(same, -1, tid), np.abs(held) * unit))):
+        np.add.at(arr, ids, vals)
+    np.maximum.at(size, tid[tid >= 0], np.abs(held[tid >= 0]))
+
+    idx, n = bars.index, len(bars)
+    o, c = bars["open"].to_numpy(), bars["close"].to_numpy()
+    entry = np.flatnonzero(start)
+    exit_at = np.full(k, n - 1)
+    closes = np.flatnonzero((ptid >= 0) & ~same)
+    exit_at[ptid[closes]] = closes
+    is_open = np.ones(k, dtype=bool)
+    is_open[ptid[closes]] = False
+    pnl = gross - cost
+    t = pd.DataFrame({
+        "signal_time": idx[np.maximum(entry - delay, 0)], "entry_time": idx[entry],
+        "direction": np.where(held[entry] > 0, "long", "short"), "entry_price": o[entry],
+        "size": size, "exit_time": idx[exit_at], "exit_price": np.where(is_open, c[n - 1], o[exit_at]),
+        "result": np.where(is_open, "open", np.where(pnl > 0, "win", "loss")),
+        "pnl_gross": gross, "pnl": pnl, "signal_id": np.arange(k),
+        "session": sessions.label(idx[entry]),
+    })
+    return t.reindex(columns=TRADE_COLUMNS)
 
 
 def benchmark(bars: pd.DataFrame, symbol: str) -> pd.DataFrame:
     """Buy-and-hold one unit from the first fillable bar, before costs (use its pnl_gross)."""
-    return simulate_positions(bars, pd.Series(1.0, index=bars.index), symbol, costs=False)
+    return simulate_positions(bars, pd.Series(1.0, index=bars.index), symbol, costs=False)[0]
 
 
 # ── Candidates (bracket orders) ───────────────────────────────────────────────
@@ -245,7 +291,7 @@ def orders(strategy, bars: pd.DataFrame, params: dict):
 
 def simulate(out, bars: pd.DataFrame, exit_bars: pd.DataFrame, symbol: str,
              delay: int = 1) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """(daily frame, trades) for a strategy's output; trades is empty for positions."""
+    """(daily frame, trade list) for a strategy's output."""
     if isinstance(out, pd.DataFrame):
         return simulate_candidates(exit_bars, out, symbol, bars.attrs["bar_size"], delay)
-    return simulate_positions(bars, out, symbol, delay), pd.DataFrame(columns=TRADE_COLUMNS)
+    return simulate_positions(bars, out, symbol, delay)

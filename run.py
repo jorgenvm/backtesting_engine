@@ -134,7 +134,7 @@ def evaluate(name: str, mode: str, symbol: str | None = None, bar_size: str | No
         dsr=metrics.deflated_sharpe(d["ret"], n_trials, sr_var), trials=n_trials, sr_var=sr_var,
         grid_positive=float((grid_sr > 0).mean()), causality=causality, health=health,
         holdout_views=len(views) + (mode == "holdout"), contaminated=contaminated,
-        trade_stats=metrics.trade_stats(trades) if len(trades) else None,
+        evaluation=metrics.evaluation(trades, d, CFG["account"]["initial_balance"]),
         config={k: CFG[k] for k in ("costs", "account", "bracket", "walk_forward", "exit_bar_size")},
     )
     meta["verdicts"] = validate.verdicts(meta)

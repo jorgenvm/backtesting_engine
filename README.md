@@ -133,7 +133,10 @@ python run.py ingest es_ticks.csv --symbol ES --tz America/Chicago \
 | Causality | always (else the run is rejected) | no signal changed when future data was removed |
 | Data | quotes present, no gaps | costs use the real spread; no holes in the data |
 
-The panels are: key metrics against buy & hold; equity net, before costs and buy & hold, with
+The panels are: key metrics against buy & hold; an **Evaluation** card for the out-of-sample
+trades, switchable between $ and R (trade count, average profit per trading day, biggest
+winner and loser, modelled fees, holding time, win rate excluding breakevens, ROI, max
+drawdown, winning and losing days, trades per active day and week, current streak); equity net, before costs and buy & hold, with
 fold boundaries marked; drawdown; Sharpe per fold, in- and out-of-sample, with the parameters
 each fold chose; the parameter heatmap (diverging around 0, with how often each cell was
 chosen); yearly returns; rolling 1-year Sharpe; and data health. Pick a second run in
@@ -157,9 +160,10 @@ tests/test_core.py       known-answer tests
 results/                 trials.jsonl, holdout_ledger.jsonl, runs/<time>_<strategy>_<mode>/
 ```
 
-Each run folder holds `meta.json` (settings, metrics, verdicts and the data health report)
-plus `daily.parquet`, `folds.parquet`, `grid.parquet` and, for bracket strategies,
-`trades.parquet`.
+Each run folder holds `meta.json` (settings, metrics, evaluation, verdicts and the data health
+report) plus `daily.parquet`, `folds.parquet`, `grid.parquet` and `trades.parquet`. Position
+strategies get a trade list too: one round trip from opening to flat (or a flip), with no R
+columns since they have no stop.
 
 Out of scope on purpose: a tick-by-tick order simulator. Bar-level fills at the next open,
 with spread-based costs, are accurate enough for anything that isn't latency-sensitive.
