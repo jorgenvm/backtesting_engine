@@ -157,7 +157,7 @@ def evaluate(name: str, mode: str, symbol: str | None = None, bar_size: str | No
 
 def _print(meta: dict, wf: pd.DataFrame, run_dir: Path) -> None:
     m = meta["metrics"]
-    print(f"  folds       " + "  ".join(f"{r.test_start:%Y}:{r.oos_sharpe:+.2f}" for r in wf.itertuples()))
+    print("  folds       " + "  ".join(f"{r.test_start:%Y}:{r.oos_sharpe:+.2f}" for r in wf.itertuples()))
     print(f"  OOS         {meta['oos_start']} → {meta['oos_end']}   CAGR {m['cagr']:+.1%}   Sharpe {m['sharpe']:.2f}"
           f" (buy & hold {m['bench_sharpe']:.2f})   max DD {m['max_dd']:.1%}   cost drag {m['cost_drag']:.1%}/yr")
     icon = {"pass": "+", "warn": "!", "fail": "x", "info": "·"}

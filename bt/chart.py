@@ -21,7 +21,7 @@ LIB = "https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/dist/lightweight-ch
 def _wall(ts) -> list[int]:
     """UTC → wall-clock seconds (the chart library only renders UTC)."""
     t = pd.DatetimeIndex(pd.to_datetime(ts, utc=True)).tz_convert(TZ).tz_localize(None)
-    return (t.asi8 // 10**9).tolist()
+    return (t.as_unit("s").asi8).tolist()
 
 
 def _candles(df: pd.DataFrame) -> list[dict]:
