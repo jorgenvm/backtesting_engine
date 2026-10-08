@@ -145,7 +145,7 @@ def test_ingest_builds_bars_drops_bad_ticks_and_hides_the_holdout(tmp_path, monk
     ticks.index.name = "ts"
     data.ingest(ticks, SYM, "ticks")
     data.ingest(ticks, SYM, "ticks")                       # re-ingest replaces, no duplicates
-    stored = pd.read_parquet(data.raw_files(SYM, "ticks")[0])
+    stored = pd.concat(pd.read_parquet(f) for f in data.raw_files(SYM, "ticks"))   # one file per year
     assert list(stored.columns) == ["ts", "price", "size", "bid", "ask"] and len(stored) == len(ticks)
     bars, health = data.load_bars(SYM, "5min", "research")
     assert bars.index.max() < h and health["bad_rows"] == 1 and health["quotes"]
