@@ -1,5 +1,8 @@
 pandas>=2.0
 numpy>=1.26
-pyarrow
-databento
+pyarrow>=14
+duckdb>=1.1
+pyyaml>=6
 python-dotenv
+pytest
+databento        # optional: only for `run.py ingest --databento`

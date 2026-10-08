@@ -1,0 +1,54 @@
+# Every tunable setting of the backtester. Strategies keep their own parameters (PARAMS).
+# Command-line flags (--symbol, --bar-size) override the defaults below.
+
+symbol: NQ
+bar_size: 5min           # bars the strategy sees (pandas offset: 1min, 5min, 1h, 1d …)
+exit_bar_size: 1min      # bars bracket exits are walked on (finer = more exact); >= the raw data resolution
+timezone: Europe/Berlin  # trading days, sessions and chart times
+
+data:
+  dir: data
+  start: 2011-01-01
+  holdout_start: 2024-01-01   # research never loads anything from here on
+  source_kind: auto           # ticks | bars | auto (ticks when both are stored)
+  spike_pct: 0.05             # a tick this far from both neighbours (which agree) is dropped
+  gap_factor: 10              # health report: gaps longer than gap_factor x bar_size …
+  min_gap: 2h                 # … and than this, so exchange daily breaks are not flagged
+  duckdb_memory: 4GB          # beyond this DuckDB spills to data/.duckdb_tmp
+
+instruments:  # tick (points), point_value (USD per point per unit), commission (USD round trip per unit)
+  # roll: quarterly = new contract after each 3rd-Friday expiry (Mar/Jun/Sep/Dec) when the data
+  # has no instrument_id; none = one continuous instrument (stocks, spot FX, crypto)
+  NQ:    {tick: 0.25, point_value: 20,   commission: 4.50, roll: quarterly, databento: NQ.c.0}
+  ES:    {tick: 0.25, point_value: 50,   commission: 4.50, roll: quarterly, databento: ES.c.0}
+  CL:    {tick: 0.01, point_value: 1000, commission: 4.50, roll: none,      databento: CL.c.0}
+  GC:    {tick: 0.10, point_value: 100,  commission: 4.50, roll: none,      databento: GC.c.0}
+  SYNTH: {tick: 0.25, point_value: 20,   commission: 4.50, roll: none}     # tools/make_synthetic_ticks.py
+
+costs:  # always on: charged on every position change
+  slippage_ticks: 1           # per market fill; resting bracket targets get none
+  half_spread: true           # plus half the measured bid/ask spread when the data has quotes
+
+account:
+  initial_balance: 1000000    # USD
+  risk_per_trade: 1000        # bracket strategies without a size column: units = this / risk in USD
+
+bracket:  # candidate strategies only
+  max_open: 1                 # trades open at once; null = no limit
+  one_per_signal: true        # candidates sharing a signal_id trade once
+  session_stop_r: null        # skip a session's candidates once its closed trades reach -this R
+
+walk_forward:
+  train_years: 3
+  test_years: 1
+  embargo_days: 5             # gap between a training window and its test window
+  max_grid: 27                # warn above this many parameter sets
+
+validation:
+  causality_cuts: 5           # random cut-off points per run
+  seed: null                  # null = new cut-offs every run
+
+sessions:  # wall-clock in `timezone`, start inclusive, end exclusive
+  London:   ["09:00", "12:00"]
+  New York: ["15:30", "18:00"]
+  Scalp:    ["20:00", "21:30"]
