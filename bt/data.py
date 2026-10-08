@@ -123,14 +123,14 @@ def ingest(source, symbol: str, kind: str | None = None, mapping: dict | None = 
 
     written = {}
     for ydir in sorted(stage.glob("year=*")):
-        new = f"read_parquet('{ydir.as_posix()}/*.parquet')"
+        new = f"read_parquet('{ydir.as_posix()}/*.parquet', hive_partitioning = false)"
         lo, hi, n = con.sql(f"SELECT min(ts), max(ts), count(*) FROM {new}").fetchone()
         dest = RAW / kind / f"symbol={symbol}" / ydir.name
         dest.mkdir(parents=True, exist_ok=True)
         out, tmp = dest / "data.parquet", dest / "data.parquet.tmp"
         parts = [f"SELECT * FROM {new}"]
         if out.exists():                                     # keep stored rows outside the new span
-            parts.insert(0, f"SELECT * FROM read_parquet('{out.as_posix()}') "
+            parts.insert(0, f"SELECT * FROM read_parquet('{out.as_posix()}', hive_partitioning = false) "
                             f"WHERE ts < TIMESTAMP '{lo}' OR ts > TIMESTAMP '{hi}'")
         con.execute(f"COPY (SELECT * FROM ({' UNION ALL BY NAME '.join(parts)}) ORDER BY ts) "
                     f"TO '{tmp.as_posix()}' (FORMAT parquet, COMPRESSION zstd)")

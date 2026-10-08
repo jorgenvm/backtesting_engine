@@ -19,11 +19,12 @@ data:
 instruments:  # tick (points), point_value (USD per point per unit), commission (USD round trip per unit)
   # roll: quarterly = new contract after each 3rd-Friday expiry (Mar/Jun/Sep/Dec) when the data
   # has no instrument_id; none = one continuous instrument (stocks, spot FX, crypto)
+  # null_test: true = random data; its runs are not counted in the trial registry
   NQ:    {tick: 0.25, point_value: 20,   commission: 4.50, roll: quarterly, databento: NQ.c.0}
   ES:    {tick: 0.25, point_value: 50,   commission: 4.50, roll: quarterly, databento: ES.c.0}
   CL:    {tick: 0.01, point_value: 1000, commission: 4.50, roll: none,      databento: CL.c.0}
   GC:    {tick: 0.10, point_value: 100,  commission: 4.50, roll: none,      databento: GC.c.0}
-  SYNTH: {tick: 0.25, point_value: 20,   commission: 4.50, roll: none}     # tools/make_synthetic_ticks.py
+  SYNTH: {tick: 0.25, point_value: 20,   commission: 4.50, roll: none, null_test: true}  # tools/make_synthetic_ticks.py
 
 costs:  # always on: charged on every position change
   slippage_ticks: 1           # per market fill; resting bracket targets get none

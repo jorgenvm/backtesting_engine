@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 
 from bt import data, engine, metrics, validate
-from bt.config import CFG, RESULTS_DIR, holdout_start
+from bt.config import CFG, RESULTS_DIR, holdout_start, instrument
 
 
 def load_strategy(name: str):
@@ -81,7 +81,8 @@ def evaluate(name: str, mode: str, symbol: str | None = None, bar_size: str | No
             entries.append(dict(time=pd.Timestamp.now().isoformat(timespec="seconds"), strategy=name,
                                 code_hash=code, symbol=symbol, bar_size=bar_size, params=p,
                                 sr_daily=metrics.sharpe(pre[k], annualise=False), days=len(pre)))
-    validate.register(entries)
+    if not instrument(symbol).get("null_test"):
+        validate.register(entries)
     tri = validate.trials(name)
     n_trials, sr_var = len(tri), float(tri["sr_daily"].var(ddof=1)) if len(tri) > 1 else 0.0
 
